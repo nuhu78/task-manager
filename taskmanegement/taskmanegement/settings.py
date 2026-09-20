@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django_filters',
     # Local
     'accounts',
+    'tasks',
 ]
 
 MIDDLEWARE = [

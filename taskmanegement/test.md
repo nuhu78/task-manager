@@ -4,12 +4,16 @@
 
 ---
 
-## 1. Register
+## AUTH ENDPOINTS
+
+---
+
+### 1. Register
 
 | | |
 |---|---|
 | **Method** | `POST` |
-| **URL** | `http://127.0.0.1:8000/api/register/` |
+| **URL** | `/api/register/` |
 | **Auth** | None |
 
 **Body (raw JSON):**
@@ -22,46 +26,7 @@
 }
 ```
 
-**Expected Response (201):**
-```json
-{
-    "user": {
-        "id": 1,
-        "username": "testuser",
-        "email": "test@example.com",
-        "phone": "",
-        "bio": "",
-        "profile_picture": null,
-        "first_name": "",
-        "last_name": "",
-        "date_joined": "2026-09-19T..."
-    },
-    "tokens": {
-        "access": "<access_token>",
-        "refresh": "<refresh_token>"
-    }
-}
-```
-
----
-
-## 2. Login
-
-| | |
-|---|---|
-| **Method** | `POST` |
-| **URL** | `http://127.0.0.1:8000/api/login/` |
-| **Auth** | None |
-
-**Body (raw JSON):**
-```json
-{
-    "username": "testuser",
-    "password": "StrongPass123!"
-}
-```
-
-**Expected Response (200):**
+**Response (201):**
 ```json
 {
     "user": {
@@ -79,22 +44,42 @@
 
 ---
 
-## 3. Refresh Token
+### 2. Login
 
 | | |
 |---|---|
 | **Method** | `POST` |
-| **URL** | `http://127.0.0.1:8000/api/token/refresh/` |
+| **URL** | `/api/login/` |
 | **Auth** | None |
 
 **Body (raw JSON):**
+```json
+{
+    "username": "testuser",
+    "password": "StrongPass123!"
+}
+```
+
+**Response (200):** Returns `user` + `tokens` (same as register).
+
+---
+
+### 3. Refresh Token
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/token/refresh/` |
+| **Auth** | None |
+
+**Body:**
 ```json
 {
     "refresh": "<refresh_token>"
 }
 ```
 
-**Expected Response (200):**
+**Response (200):**
 ```json
 {
     "access": "<new_access_token>",
@@ -104,12 +89,12 @@
 
 ---
 
-## 4. View / Update Profile
+### 4. View / Update Profile
 
 | | |
 |---|---|
-| **Method** | `GET` or `PUT` / `PATCH` |
-| **URL** | `http://127.0.0.1:8000/api/profile/` |
+| **Method** | `GET` / `PUT` / `PATCH` |
+| **URL** | `/api/profile/` |
 | **Auth** | Bearer Token |
 
 **Headers:**
@@ -118,9 +103,7 @@ Authorization: Bearer <access_token>
 Content-Type: application/json
 ```
 
-**GET** — Returns current user profile.
-
-**PUT** — Update full profile:
+**PUT body:**
 ```json
 {
     "username": "testuser",
@@ -134,21 +117,15 @@ Content-Type: application/json
 
 ---
 
-## 5. Change Password
+### 5. Change Password
 
 | | |
 |---|---|
 | **Method** | `POST` |
-| **URL** | `http://127.0.0.1:8000/api/change-password/` |
+| **URL** | `/api/change-password/` |
 | **Auth** | Bearer Token |
 
-**Headers:**
-```
-Authorization: Bearer <access_token>
-Content-Type: application/json
-```
-
-**Body (raw JSON):**
+**Body:**
 ```json
 {
     "old_password": "StrongPass123!",
@@ -156,7 +133,7 @@ Content-Type: application/json
 }
 ```
 
-**Expected Response (200):**
+**Response (200):**
 ```json
 {
     "detail": "Password changed successfully."
@@ -165,32 +142,251 @@ Content-Type: application/json
 
 ---
 
+## TASK ENDPOINTS
+
+All task endpoints require `Authorization: Bearer <access_token>`.
+
+---
+
+### 6. List All Tasks
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/tasks/` |
+| **Auth** | Bearer Token |
+
+**Response (200):**
+```json
+{
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "title": "Study Django",
+            "description": "Learn DRF",
+            "status": "pending",
+            "priority": "high",
+            "due_date": "2026-09-20",
+            "created_at": "2026-09-19T...",
+            "updated_at": "2026-09-19T..."
+        },
+        {
+            "id": 2,
+            "title": "Buy groceries",
+            "description": "",
+            "status": "completed",
+            "priority": "low",
+            "due_date": "2026-09-21",
+            "created_at": "2026-09-19T...",
+            "updated_at": "2026-09-19T..."
+        }
+    ]
+}
+```
+
+---
+
+### 7. Create Task
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/tasks/` |
+| **Auth** | Bearer Token |
+
+**Body:**
+```json
+{
+    "title": "Study Django",
+    "description": "Learn Django REST Framework",
+    "status": "pending",
+    "priority": "high",
+    "due_date": "2026-09-20"
+}
+```
+
+**Response (201):**
+```json
+{
+    "id": 1,
+    "title": "Study Django",
+    "description": "Learn Django REST Framework",
+    "status": "pending",
+    "priority": "high",
+    "due_date": "2026-09-20",
+    "created_at": "2026-09-19T...",
+    "updated_at": "2026-09-19T..."
+}
+```
+
+---
+
+### 8. Get Single Task
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/tasks/<id>/` |
+| **Auth** | Bearer Token |
+
+**Response (200):** Single task object.
+
+**Response (404):** If task doesn't exist or belongs to another user.
+
+---
+
+### 9. Update Task (Full)
+
+| | |
+|---|---|
+| **Method** | `PUT` |
+| **URL** | `/api/tasks/<id>/` |
+| **Auth** | Bearer Token |
+
+**Body (all fields required):**
+```json
+{
+    "title": "Study Django",
+    "description": "Learn DRF and JWT",
+    "status": "in_progress",
+    "priority": "medium",
+    "due_date": "2026-09-25"
+}
+```
+
+---
+
+### 10. Update Task (Partial)
+
+| | |
+|---|---|
+| **Method** | `PATCH` |
+| **URL** | `/api/tasks/<id>/` |
+| **Auth** | Bearer Token |
+
+**Body (only fields to update):**
+```json
+{
+    "status": "in_progress"
+}
+```
+
+---
+
+### 11. Delete Task
+
+| | |
+|---|---|
+| **Method** | `DELETE` |
+| **URL** | `/api/tasks/<id>/` |
+| **Auth** | Bearer Token |
+
+**Response (204):** No content.
+
+---
+
+### 12. Mark Task Complete
+
+| | |
+|---|---|
+| **Method** | `PATCH` |
+| **URL** | `/api/tasks/<id>/complete/` |
+| **Auth** | Bearer Token |
+
+**Body:** Empty (no body needed)
+
+**Response (200):**
+```json
+{
+    "id": 1,
+    "title": "Study Django",
+    "description": "Learn DRF",
+    "status": "completed",
+    "priority": "high",
+    "due_date": "2026-09-20",
+    "created_at": "2026-09-19T...",
+    "updated_at": "2026-09-19T..."
+}
+```
+
+---
+
+### 13. Dashboard
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/tasks/dashboard/` |
+| **Auth** | Bearer Token |
+
+**Response (200):**
+```json
+{
+    "total_tasks": 12,
+    "pending": 5,
+    "in_progress": 3,
+    "completed": 4
+}
+```
+
+---
+
+## PERMISSIONS
+
+Each user can only see **their own** tasks. If User A tries to access User B's task by ID:
+
+```
+GET /api/tasks/5/
+```
+
+Response:
+```json
+{
+    "detail": "Not found."
+}
+```
+
+Status: `404 Not Found`
+
+---
+
 ## Postman Setup Tips
 
-1. **After login/register**, copy the `access` token from the response.
+1. **After login/register**, copy the `access` token.
 
-2. **Set Authorization header** on protected requests:
+2. **Set Authorization** on protected requests:
    - Type: `Bearer Token`
    - Token: `<access_token>`
 
-3. **Auto-save token (optional):** In Login request, go to **Tests** tab and add:
+3. **Auto-save token:** In Login request, go to **Tests** tab:
    ```javascript
    var jsonData = pm.response.json();
    pm.environment.set("access_token", jsonData.tokens.access);
    pm.environment.set("refresh_token", jsonData.tokens.refresh);
    ```
-   Then use `{{access_token}}` in Authorization headers.
+   Then use `{{access_token}}` in headers.
 
-4. **Content-Type:** Always set `Content-Type: application/json` for POST/PUT requests.
+4. **Content-Type:** Always `application/json` for POST/PUT/PATCH.
 
 ---
 
-## Testing Order
+## Full Testing Flow
 
 ```
-1. POST /api/register/     → get user + tokens
-2. POST /api/profile/      → view profile (use access token)
-3. PUT  /api/profile/      → update bio, phone, etc.
-4. POST /api/change-password/ → change password
-5. POST /api/token/refresh/   → refresh expired token
+1.  POST /api/register/            → get user + tokens
+2.  GET  /api/profile/             → verify profile
+3.  PUT  /api/profile/             → update profile
+4.  POST /api/tasks/               → create task 1
+5.  POST /api/tasks/               → create task 2
+6.  GET  /api/tasks/               → list all tasks
+7.  GET  /api/tasks/1/             → get single task
+8.  PATCH /api/tasks/1/            → update task partially
+9.  PATCH /api/tasks/1/complete/   → mark task complete
+10. GET  /api/tasks/dashboard/     → view stats
+11. DELETE /api/tasks/2/           → delete task
+12. POST /api/change-password/     → change password
+13. POST /api/token/refresh/       → refresh token
 ```
