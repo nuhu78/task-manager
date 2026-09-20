@@ -22,7 +22,8 @@
     "username": "testuser",
     "email": "test@example.com",
     "password": "StrongPass123!",
-    "password2": "StrongPass123!"
+    "password2": "StrongPass123!",
+    "role": "manager"
 }
 ```
 
@@ -33,6 +34,7 @@
         "id": 1,
         "username": "testuser",
         "email": "test@example.com",
+        "role": "manager",
         ...
     },
     "tokens": {
@@ -111,7 +113,8 @@ Content-Type: application/json
     "phone": "0987654321",
     "bio": "Updated bio",
     "first_name": "John",
-    "last_name": "Doe"
+    "last_name": "Doe",
+    "role": "manager"
 }
 ```
 
@@ -142,13 +145,240 @@ Content-Type: application/json
 
 ---
 
+## RBAC ENDPOINTS (Manager Only)
+
+All endpoints below require `Authorization: Bearer <access_token>` and the user must have `role: "manager"`.
+
+---
+
+### 6. List Employees
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/employees/` |
+| **Auth** | Bearer Token (Manager only) |
+
+**Response (200):**
+```json
+{
+    "count": 3,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 2,
+            "username": "emp1",
+            "email": "emp1@example.com",
+            "phone": "1234567890",
+            "role": "employee"
+        },
+        {
+            "id": 3,
+            "username": "emp2",
+            "email": "emp2@example.com",
+            "phone": "",
+            "role": "employee"
+        }
+    ]
+}
+```
+
+---
+
+### 7. Create Team
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/teams/` |
+| **Auth** | Bearer Token (Manager only) |
+
+**Body:**
+```json
+{
+    "name": "Frontend Team",
+    "description": "Handles all frontend development"
+}
+```
+
+**Response (201):**
+```json
+{
+    "id": 1,
+    "name": "Frontend Team",
+    "description": "Handles all frontend development",
+    "manager": 1,
+    "members": [],
+    "member_count": 0,
+    "created_at": "2026-09-19T..."
+}
+```
+
+---
+
+### 8. List My Teams
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/teams/` |
+| **Auth** | Bearer Token (Manager only) |
+
+**Response (200):**
+```json
+{
+    "count": 2,
+    "next": null,
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "name": "Frontend Team",
+            "description": "Handles all frontend development",
+            "manager": 1,
+            "member_count": 3,
+            "created_at": "2026-09-19T..."
+        },
+        {
+            "id": 2,
+            "name": "Backend Team",
+            "description": "Backend development team",
+            "manager": 1,
+            "member_count": 2,
+            "created_at": "2026-09-19T..."
+        }
+    ]
+}
+```
+
+---
+
+### 9. Get Single Team
+
+| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/teams/<id>/` |
+| **Auth** | Bearer Token (Manager only) |
+
+**Response (200):**
+```json
+{
+    "id": 1,
+    "name": "Frontend Team",
+    "description": "Handles all frontend development",
+    "manager": 1,
+    "members": [
+        {
+            "id": 1,
+            "employee": {
+                "id": 2,
+                "username": "emp1",
+                "email": "emp1@example.com",
+                "phone": "1234567890",
+                "role": "employee"
+            },
+            "joined_at": "2026-09-19T..."
+        }
+    ],
+    "member_count": 1,
+    "created_at": "2026-09-19T..."
+}
+```
+
+---
+
+### 10. Update Team
+
+| | |
+|---|---|
+| **Method** | `PUT` / `PATCH` |
+| **URL** | `/api/teams/<id>/` |
+| **Auth** | Bearer Token (Manager only) |
+
+**Body (PATCH):**
+```json
+{
+    "name": "Frontend Dev Team",
+    "description": "Updated description"
+}
+```
+
+**Response (200):** Updated team object.
+
+---
+
+### 11. Delete Team
+
+| | |
+|---|---|
+| **Method** | `DELETE` |
+| **URL** | `/api/teams/<id>/` |
+| **Auth** | Bearer Token (Manager only) |
+
+**Response (204):** No content.
+
+---
+
+### 12. Assign Employee to Team
+
+| | |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `/api/teams/<id>/assign/` |
+| **Auth** | Bearer Token (Manager only) |
+
+**Body:**
+```json
+{
+    "employee_id": 2
+}
+```
+
+**Response (201):**
+```json
+{
+    "id": 1,
+    "employee": {
+        "id": 2,
+        "username": "emp1",
+        "email": "emp1@example.com",
+        "phone": "1234567890",
+        "role": "employee"
+    },
+    "joined_at": "2026-09-19T..."
+}
+```
+
+---
+
+### 13. Remove Employee from Team
+
+| | |
+|---|---|
+| **Method** | `DELETE` |
+| **URL** | `/api/teams/<id>/assign/` |
+| **Auth** | Bearer Token (Manager only) |
+
+**Body:**
+```json
+{
+    "employee_id": 2
+}
+```
+
+**Response (204):** No content.
+
+---
+
 ## TASK ENDPOINTS
 
 All task endpoints require `Authorization: Bearer <access_token>`.
 
 ---
 
-### 6. List All Tasks
+### 14. List All Tasks
 
 | | |
 |---|---|
@@ -189,7 +419,7 @@ All task endpoints require `Authorization: Bearer <access_token>`.
 
 ---
 
-### 7. Create Task
+### 15. Create Task
 
 | | |
 |---|---|
@@ -224,7 +454,7 @@ All task endpoints require `Authorization: Bearer <access_token>`.
 
 ---
 
-### 8. Get Single Task
+### 16. Get Single Task
 
 | | |
 |---|---|
@@ -234,11 +464,9 @@ All task endpoints require `Authorization: Bearer <access_token>`.
 
 **Response (200):** Single task object.
 
-**Response (404):** If task doesn't exist or belongs to another user.
-
 ---
 
-### 9. Update Task (Full)
+### 17. Update Task (Full)
 
 | | |
 |---|---|
@@ -259,7 +487,7 @@ All task endpoints require `Authorization: Bearer <access_token>`.
 
 ---
 
-### 10. Update Task (Partial)
+### 18. Update Task (Partial)
 
 | | |
 |---|---|
@@ -276,7 +504,7 @@ All task endpoints require `Authorization: Bearer <access_token>`.
 
 ---
 
-### 11. Delete Task
+### 19. Delete Task
 
 | | |
 |---|---|
@@ -288,7 +516,7 @@ All task endpoints require `Authorization: Bearer <access_token>`.
 
 ---
 
-### 12. Mark Task Complete
+### 20. Mark Task Complete
 
 | | |
 |---|---|
@@ -314,7 +542,7 @@ All task endpoints require `Authorization: Bearer <access_token>`.
 
 ---
 
-### 13. Dashboard
+### 21. Dashboard
 
 | | |
 |---|---|
@@ -336,20 +564,13 @@ All task endpoints require `Authorization: Bearer <access_token>`.
 
 ## PERMISSIONS
 
-Each user can only see **their own** tasks. If User A tries to access User B's task by ID:
-
-```
-GET /api/tasks/5/
-```
-
-Response:
-```json
-{
-    "detail": "Not found."
-}
-```
-
-Status: `404 Not Found`
+| Endpoint | Manager | Employee |
+|----------|---------|----------|
+| `/api/employees/` | ✅ | ❌ |
+| `/api/teams/` (CRUD) | ✅ | ❌ |
+| `/api/teams/<id>/assign/` | ✅ | ❌ |
+| `/api/tasks/` | ✅ (own) | ✅ (own) |
+| `/api/tasks/<id>/` | ✅ (own) | ✅ (own) |
 
 ---
 
@@ -376,17 +597,21 @@ Status: `404 Not Found`
 ## Full Testing Flow
 
 ```
-1.  POST /api/register/            → get user + tokens
-2.  GET  /api/profile/             → verify profile
-3.  PUT  /api/profile/             → update profile
-4.  POST /api/tasks/               → create task 1
-5.  POST /api/tasks/               → create task 2
-6.  GET  /api/tasks/               → list all tasks
-7.  GET  /api/tasks/1/             → get single task
-8.  PATCH /api/tasks/1/            → update task partially
-9.  PATCH /api/tasks/1/complete/   → mark task complete
-10. GET  /api/tasks/dashboard/     → view stats
-11. DELETE /api/tasks/2/           → delete task
-12. POST /api/change-password/     → change password
-13. POST /api/token/refresh/       → refresh token
+1.  POST /api/register/            → register manager (role: "manager")
+2.  POST /api/register/            → register employee (role: "employee")
+3.  POST /api/login/               → login as manager, get token
+4.  GET  /api/employees/           → list all employees
+5.  POST /api/teams/               → create team
+6.  GET  /api/teams/               → list teams
+7.  POST /api/teams/1/assign/      → assign employee to team
+8.  GET  /api/teams/1/             → view team with members
+9.  DELETE /api/teams/1/assign/    → remove employee from team
+10. PUT  /api/teams/1/             → update team
+11. DELETE /api/teams/1/           → delete team
+12. POST /api/tasks/               → create task
+13. GET  /api/tasks/               → list tasks
+14. PATCH /api/tasks/1/            → update task
+15. PATCH /api/tasks/1/complete/   → mark complete
+16. GET  /api/tasks/dashboard/     → view stats
+17. DELETE /api/tasks/1/           → delete task
 ```

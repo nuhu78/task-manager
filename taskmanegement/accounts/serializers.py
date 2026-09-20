@@ -2,6 +2,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from .models import Team, TeamMember
+
 User = get_user_model()
 
 
@@ -9,7 +11,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'phone', 'bio', 'profile_picture',
-                  'first_name', 'last_name', 'date_joined']
+                  'first_name', 'last_name', 'role', 'date_joined']
         read_only_fields = ['id', 'date_joined']
 
 
@@ -19,7 +21,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password2']
+        fields = ['username', 'email', 'password', 'password2', 'role']
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -48,3 +50,48 @@ class ChangePasswordSerializer(serializers.Serializer):
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
+
+
+class EmployeeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'phone', 'role']
+
+
+class TeamMemberSerializer(serializers.ModelSerializer):
+    employee = EmployeeSerializer(read_only=True)
+    employee_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(role='employee'),
+        source='employee',
+        write_only=True
+    )
+
+    class Meta:
+        model = TeamMember
+        fields = ['id', 'employee', 'employee_id', 'joined_at']
+        read_only_fields = ['id', 'joined_at']
+
+
+class TeamSerializer(serializers.ModelSerializer):
+    members = TeamMemberSerializer(many=True, read_only=True)
+    member_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Team
+        fields = ['id', 'name', 'description', 'manager', 'members', 'member_count', 'created_at']
+        read_only_fields = ['id', 'manager', 'created_at']
+
+    def get_member_count(self, obj):
+        return obj.members.count()
+
+
+class TeamListSerializer(serializers.ModelSerializer):
+    member_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Team
+        fields = ['id', 'name', 'description', 'manager', 'member_count', 'created_at']
+        read_only_fields = ['id', 'manager', 'created_at']
+
+    def get_member_count(self, obj):
+        return obj.members.count()
