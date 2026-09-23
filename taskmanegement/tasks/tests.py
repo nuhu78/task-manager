@@ -129,21 +129,6 @@ class TaskAuthTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('access', response.data)
 
-    def test_wrong_password_401(self):
-        response = self.client.post('/api/login/', {
-            'username': 'authuser', 'password': 'WrongPass!'
-        }, format='json')
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
-    def test_no_token_returns_401(self):
-        response = self.client.get('/api/tasks/')
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
-    def test_invalid_token_returns_401(self):
-        self.client.credentials(HTTP_AUTHORIZATION='Bearer invalidtoken123')
-        response = self.client.get('/api/tasks/')
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
 
 # ──────────────────────────────────────────────
 #  Create Task
@@ -175,19 +160,6 @@ class TaskCreateTest(JWTAuthMixin, TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['status'], 'pending')
         self.assertEqual(response.data['priority'], 'medium')
-
-    def test_create_completed_not_allowed(self):
-        response = self.client.post('/api/tasks/', {
-            'title': 'Bad', 'status': 'completed'
-        }, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_create_missing_title(self):
-        response = self.client.post('/api/tasks/', {
-            'description': 'no title'
-        }, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('title', response.data)
 
     def test_create_task_belongs_to_logged_in_user(self):
         self.client.post('/api/tasks/', {'title': 'Mine'}, format='json')
@@ -246,18 +218,6 @@ class TaskRetrieveTest(JWTAuthMixin, TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['title'], 'Get Me')
 
-    def test_get_other_users_task_404(self):
-        other = User.objects.create_user(
-            username='other', email='o@t.com', password='Pass123!'
-        )
-        task = Task.objects.create(user=other, title='Secret')
-        response = self.client.get(f'/api/tasks/{task.id}/')
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-
-    def test_get_nonexistent_task_404(self):
-        response = self.client.get('/api/tasks/9999/')
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-
 
 # ──────────────────────────────────────────────
 #  Update Task
@@ -298,16 +258,6 @@ class TaskUpdateTest(JWTAuthMixin, TestCase):
         self.assertEqual(self.task.priority, 'high')
         self.assertEqual(self.task.title, 'Old')
 
-    def test_cannot_update_other_users_task(self):
-        other = User.objects.create_user(
-            username='other', email='o@t.com', password='Pass123!'
-        )
-        task = Task.objects.create(user=other, title='Secret')
-        response = self.client.patch(
-            f'/api/tasks/{task.id}/', {'title': 'Hacked'}, format='json'
-        )
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-
 
 # ──────────────────────────────────────────────
 #  Delete Task
@@ -325,15 +275,6 @@ class TaskDeleteTest(JWTAuthMixin, TestCase):
         response = self.client.delete(f'/api/tasks/{task.id}/')
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(Task.objects.count(), 0)
-
-    def test_cannot_delete_other_users_task(self):
-        other = User.objects.create_user(
-            username='other', email='o@t.com', password='Pass123!'
-        )
-        task = Task.objects.create(user=other, title='Protected')
-        response = self.client.delete(f'/api/tasks/{task.id}/')
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(Task.objects.count(), 1)
 
 
 # ──────────────────────────────────────────────
@@ -364,18 +305,6 @@ class TaskCompleteTest(JWTAuthMixin, TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         task.refresh_from_db()
         self.assertEqual(task.status, 'completed')
-
-    def test_complete_nonexistent_404(self):
-        response = self.client.patch('/api/tasks/9999/complete/')
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-
-    def test_cannot_complete_other_users_task(self):
-        other = User.objects.create_user(
-            username='other', email='o@t.com', password='Pass123!'
-        )
-        task = Task.objects.create(user=other, title='Secret', status='pending')
-        response = self.client.patch(f'/api/tasks/{task.id}/complete/')
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 # ──────────────────────────────────────────────
@@ -461,10 +390,6 @@ class TaskPaginationTest(JWTAuthMixin, TestCase):
         self.assertIsNotNone(response.data['next'])
         self.assertIsNotNone(response.data['previous'])
 
-    def test_out_of_range_page(self):
-        response = self.client.get('/api/tasks/?page=99')
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-
     def test_all_30_tasks_across_pages(self):
         all_tasks = []
         for page in range(1, 4):
@@ -479,3 +404,121 @@ class TaskPaginationTest(JWTAuthMixin, TestCase):
     def test_no_page_param_returns_first_page(self):
         response = self.client.get('/api/tasks/')
         self.assertEqual(len(response.data['results']), 10)
+
+
+# ──────────────────────────────────────────────
+#  Exception Tests
+# ──────────────────────────────────────────────
+
+
+class ExceptionTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.client.post('/api/register/', {
+            'username': 'exuser',
+            'email': 'ex@test.com',
+            'password': 'StrongPass123!',
+            'password2': 'StrongPass123!',
+            'role': 'employee',
+        }, format='json')
+        login = self.client.post('/api/login/', {
+            'username': 'exuser', 'password': 'StrongPass123!'
+        }, format='json')
+        self.token = login.data['tokens']['access']
+        self.user = User.objects.get(username='exuser')
+
+    def auth(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
+
+    # --- Auth exceptions ---
+    def test_wrong_password_401(self):
+        res = self.client.post('/api/login/', {
+            'username': 'exuser', 'password': 'WrongPass!'
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_no_token_returns_401(self):
+        res = self.client.get('/api/tasks/')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_invalid_token_returns_401(self):
+        self.client.credentials(HTTP_AUTHORIZATION='Bearer invalidtoken123')
+        res = self.client.get('/api/tasks/')
+        self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    # --- Create task exceptions ---
+    def test_create_completed_not_allowed(self):
+        self.auth()
+        res = self.client.post('/api/tasks/', {
+            'title': 'Bad', 'status': 'completed'
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_create_missing_title(self):
+        self.auth()
+        res = self.client.post('/api/tasks/', {
+            'description': 'no title'
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('title', res.data)
+
+    # --- Retrieve task exceptions ---
+    def test_get_nonexistent_task_404(self):
+        self.auth()
+        res = self.client.get('/api/tasks/9999/')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_get_other_users_task_404(self):
+        self.auth()
+        other = User.objects.create_user(
+            username='other', email='o@t.com', password='Pass123!'
+        )
+        task = Task.objects.create(user=other, title='Secret')
+        res = self.client.get(f'/api/tasks/{task.id}/')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    # --- Update task exceptions ---
+    def test_cannot_update_other_users_task(self):
+        self.auth()
+        other = User.objects.create_user(
+            username='other', email='o@t.com', password='Pass123!'
+        )
+        task = Task.objects.create(user=other, title='Secret')
+        res = self.client.patch(
+            f'/api/tasks/{task.id}/', {'title': 'Hacked'}, format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    # --- Delete task exceptions ---
+    def test_cannot_delete_other_users_task(self):
+        self.auth()
+        other = User.objects.create_user(
+            username='other', email='o@t.com', password='Pass123!'
+        )
+        task = Task.objects.create(user=other, title='Protected')
+        res = self.client.delete(f'/api/tasks/{task.id}/')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(Task.objects.filter(user=other).count(), 1)
+
+    # --- Complete task exceptions ---
+    def test_complete_nonexistent_404(self):
+        self.auth()
+        res = self.client.patch('/api/tasks/9999/complete/')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cannot_complete_other_users_task(self):
+        self.auth()
+        other = User.objects.create_user(
+            username='other', email='o@t.com', password='Pass123!'
+        )
+        task = Task.objects.create(user=other, title='Secret', status='pending')
+        res = self.client.patch(f'/api/tasks/{task.id}/complete/')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    # --- Pagination exceptions ---
+    def test_out_of_range_page(self):
+        self.auth()
+        for i in range(12):
+            Task.objects.create(user=self.user, title=f'T{i}')
+        res = self.client.get('/api/tasks/?page=99')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)

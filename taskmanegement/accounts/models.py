@@ -1,6 +1,12 @@
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.core.validators import RegexValidator
 from django.db import models
+
+phone_validator = RegexValidator(
+    regex=r'^\d{11}$',
+    message='Phone number must be exactly 11 digits.',
+)
 
 
 class User(AbstractUser):
@@ -10,7 +16,7 @@ class User(AbstractUser):
     ]
 
     email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=20, blank=True)
+    phone = models.CharField(max_length=11, blank=True, validators=[phone_validator])
     profile_picture = models.ImageField(upload_to='profile_pictures/', blank=True, null=True)
     bio = models.TextField(blank=True)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='employee')

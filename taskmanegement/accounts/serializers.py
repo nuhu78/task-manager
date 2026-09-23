@@ -1,13 +1,21 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.core.validators import RegexValidator
 from rest_framework import serializers
 
 from .models import Team, TeamMember
 
 User = get_user_model()
 
+phone_validator = RegexValidator(
+    regex=r'^\d{11}$',
+    message='Phone number must be exactly 11 digits.',
+)
+
 
 class UserSerializer(serializers.ModelSerializer):
+    phone = serializers.CharField(required=False, validators=[phone_validator])
+
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'phone', 'bio', 'profile_picture',
@@ -18,10 +26,11 @@ class UserSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, label='Confirm Password')
+    phone = serializers.CharField(required=False, validators=[phone_validator])
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password2', 'role']
+        fields = ['username', 'email', 'password', 'password2', 'role', 'phone']
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:

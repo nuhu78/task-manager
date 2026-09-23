@@ -17,6 +17,11 @@ class TeamAdmin(admin.ModelAdmin):
     list_display = ['name', 'manager', 'created_at']
     list_filter = ['manager']
 
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'manager':
+            kwargs['queryset'] = User.objects.filter(role='manager')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
 
 @admin.register(TeamMember)
 class TeamMemberAdmin(admin.ModelAdmin):
