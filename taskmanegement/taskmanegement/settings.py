@@ -45,6 +45,9 @@ INSTALLED_APPS = [
     # Local
     'accounts',
     'tasks',
+
+     'django_celery_results',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -175,3 +178,37 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': False,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+# ============================================================
+# CELERY CONFIGURATION
+# ============================================================
+
+# Broker: Where tasks are stored (Redis)
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+
+# Result Backend: Where results are stored (Redis or DB)
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+# Serialization
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+
+# Timezone (must match Django's TIME_ZONE)
+CELERY_TIMEZONE = 'UTC'
+
+# Task settings
+CELERY_TASK_TRACK_STARTED = True      # Track when tasks start
+CELERY_TASK_TIME_LIMIT = 300          # Hard limit: kill after 5 minutes
+CELERY_TASK_SOFT_TIME_LIMIT = 240     # Soft limit: raise TimeoutError at 4 minutes
+
+# Worker settings
+CELERY_WORKER_CONCURRENCY = 4         # Number of parallel tasks per worker
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 100  # Restart worker after 100 tasks (prevents memory leaks)
+
+# Test settings: run tasks synchronously (no broker needed)
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+
+# Email backend (standard Django setting)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = 'noreply@taskmanager.com'

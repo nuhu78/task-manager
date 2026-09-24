@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import Team, TeamMember
+from .tasks import send_team_assignment_email
 from .serializers import (
     RegisterSerializer,
     LoginSerializer,
@@ -141,6 +142,9 @@ class TeamAssignView(APIView):
             return Response({'detail': 'Employee already in this team.'}, status=status.HTTP_400_BAD_REQUEST)
 
         member = TeamMember.objects.create(team=team, employee=employee)
+
+        send_team_assignment_email.delay(team.id, employee.id)
+
         return Response(TeamMemberSerializer(member).data, status=status.HTTP_201_CREATED)
 
     def delete(self, request, pk):

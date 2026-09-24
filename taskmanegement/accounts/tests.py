@@ -1,9 +1,13 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from .models import Team, TeamMember
+from .tasks import send_team_assignment_email
 
 User = get_user_model()
 
@@ -179,3 +183,181 @@ class ExceptionTest(TestCase):
     def test_profile_unauthenticated(self):
         res = self.client.get('/api/profile/')
         self.assertEqual(res.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+# ──────────────────────────────────────────────
+#  Celery Configuration Tests
+# ──────────────────────────────────────────────
+
+
+class CeleryConfigTest(TestCase):
+    def test_celery_app_is_configured(self):
+        from taskmanegement.celery import app
+        self.assertEqual(app.main, 'taskmanegement')
+
+    def test_celery_app_uses_json_serialization(self):
+        from taskmanegement.celery import app
+        self.assertIn('json', app.conf.accept_content)
+
+    def test_task_autodiscovery(self):
+        from taskmanegement.celery import app
+        registered = app.tasks.keys()
+        self.assertIn('accounts.tasks.send_team_assignment_email', registered)
+
+    def test_eager_mode_enabled(self):
+        from django.conf import settings
+        self.assertTrue(settings.CELERY_TASK_ALWAYS_EAGER)
+
+    def test_eager_propagation_enabled(self):
+        from django.conf import settings
+        self.assertTrue(settings.CELERY_TASK_EAGER_PROPAGATES)
+
+
+# ──────────────────────────────────────────────
+#  Send Team Assignment Email Tests
+# ──────────────────────────────────────────────
+
+
+class SendTeamAssignmentEmailTest(TestCase):
+    def setUp(self):
+        self.manager = User.objects.create_user(
+            username='manager1', email='manager1@test.com',
+            password='Test@1234', role='manager',
+            first_name='John', last_name='Manager'
+        )
+        self.employee = User.objects.create_user(
+            username='employee1', email='employee1@test.com',
+            password='Test@1234', role='employee',
+            first_name='Jane', last_name='Employee'
+        )
+        self.team = Team.objects.create(
+            name='Engineering',
+            description='Software engineering team',
+            manager=self.manager
+        )
+
+    def test_sends_email_to_employee(self):
+        send_team_assignment_email(self.team.id, self.employee.id)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['employee1@test.com'])
+
+    def test_email_subject_contains_team_name(self):
+        send_team_assignment_email(self.team.id, self.employee.id)
+        self.assertIn('Engineering', mail.outbox[0].subject)
+
+    def test_email_body_contains_manager_full_name(self):
+        send_team_assignment_email(self.team.id, self.employee.id)
+        self.assertIn('John Manager', mail.outbox[0].body)
+
+    def test_email_body_contains_employee_name(self):
+        send_team_assignment_email(self.team.id, self.employee.id)
+        self.assertIn('Jane Employee', mail.outbox[0].body)
+
+    def test_email_body_contains_team_description(self):
+        send_team_assignment_email(self.team.id, self.employee.id)
+        self.assertIn('Software engineering team', mail.outbox[0].body)
+
+    def test_returns_success_message(self):
+        result = send_team_assignment_email(self.team.id, self.employee.id)
+        self.assertEqual(result, 'Email sent to employee1@test.com')
+
+    def test_email_from_address(self):
+        send_team_assignment_email(self.team.id, self.employee.id)
+        self.assertEqual(mail.outbox[0].from_email, 'noreply@taskmanager.com')
+
+
+class SendTeamAssignmentEmailNoDescriptionTest(TestCase):
+    def setUp(self):
+        self.manager = User.objects.create_user(
+            username='manager1', email='manager1@test.com',
+            password='Test@1234', role='manager',
+            first_name='John', last_name='Manager'
+        )
+        self.employee = User.objects.create_user(
+            username='employee1', email='employee1@test.com',
+            password='Test@1234', role='employee',
+            first_name='Jane', last_name='Employee'
+        )
+        self.team = Team.objects.create(
+            name='Engineering',
+            description='',
+            manager=self.manager
+        )
+
+    def test_works_without_description(self):
+        result = send_team_assignment_email(self.team.id, self.employee.id)
+        self.assertEqual(result, 'Email sent to employee1@test.com')
+        self.assertEqual(len(mail.outbox), 1)
+
+
+class SendTeamAssignmentEmailEdgeCasesTest(TestCase):
+    def setUp(self):
+        self.manager = User.objects.create_user(
+            username='manager1', email='manager1@test.com',
+            password='Test@1234', role='manager'
+        )
+        self.employee = User.objects.create_user(
+            username='employee1', email='employee1@test.com',
+            password='Test@1234', role='employee'
+        )
+        self.team = Team.objects.create(name='Team A', manager=self.manager)
+
+    def test_missing_team_returns_error(self):
+        result = send_team_assignment_email(9999, self.employee.id)
+        self.assertEqual(result, 'Team 9999 not found')
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_missing_employee_returns_error(self):
+        result = send_team_assignment_email(self.team.id, 9999)
+        self.assertEqual(result, 'Employee 9999 not found')
+        self.assertEqual(len(mail.outbox), 0)
+
+
+# ──────────────────────────────────────────────
+#  Team Assign View + Celery Integration Tests
+# ──────────────────────────────────────────────
+
+
+class TeamAssignViewCeleryIntegrationTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.manager = User.objects.create_user(
+            username='manager1', email='manager1@test.com',
+            password='Test@1234', role='manager'
+        )
+        self.employee = User.objects.create_user(
+            username='employee1', email='employee1@test.com',
+            password='Test@1234', role='employee'
+        )
+        self.team = Team.objects.create(name='Team A', manager=self.manager)
+        self.client.force_authenticate(user=self.manager)
+
+    @patch('accounts.tasks.send_team_assignment_email.delay')
+    def test_assign_triggers_celery_task(self, mock_delay):
+        mock_delay.return_value = None
+        res = self.client.post(
+            f'/api/teams/{self.team.pk}/assign/',
+            {'employee_id': self.employee.pk},
+            format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        mock_delay.assert_called_once_with(self.team.id, self.employee.id)
+
+    def test_api_response_not_blocked_by_email(self):
+        res = self.client.post(
+            f'/api/teams/{self.team.pk}/assign/',
+            {'employee_id': self.employee.pk},
+            format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(TeamMember.objects.count(), 1)
+
+    def test_email_sent_on_successful_assign(self):
+        res = self.client.post(
+            f'/api/teams/{self.team.pk}/assign/',
+            {'employee_id': self.employee.pk},
+            format='json'
+        )
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['employee1@test.com'])
