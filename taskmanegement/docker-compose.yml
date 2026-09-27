@@ -11,7 +11,10 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-    command: --default-authentication-plugin=mysql_native_password
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --general-log=1
+      --log-output=TABLE
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -97,17 +100,18 @@ services:
       - redis
       - db
 
-  flower:
-    build: .
-    container_name: task_flower
-    command: celery -A taskmanegement flower --port=5555
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: task_phpmyadmin
     ports:
-      - "5555:5555"
+      - "8080:80"
     environment:
-      - DJANGO_SETTINGS_MODULE=taskmanegement.settings
+      PMA_HOST: db
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: root_password
     depends_on:
-      - celery-worker
-      - redis
+      db:
+        condition: service_healthy
 
 volumes:
   mysql_data:
