@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
+import sentry_sdk
+
 from .models import Team, TeamMember
 from .tasks import send_team_assignment_email
 from .serializers import (
@@ -124,43 +126,176 @@ class TeamAssignView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsManager]
 
     def post(self, request, pk):
+
+        # 1. Find the team
         try:
-            team = Team.objects.get(pk=pk, manager=request.user)
+            with sentry_sdk.start_span(
+                op="team.lookup",
+                name="Lookup Team"
+            ):
+                team = Team.objects.get(
+                    pk=pk,
+                    manager=request.user
+                )
+
         except Team.DoesNotExist:
-            return Response({'detail': 'Team not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'detail': 'Team not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
+        # 2. Validate employee ID
         employee_id = request.data.get('employee_id')
+
         if not employee_id:
-            return Response({'detail': 'employee_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'detail': 'employee_id is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        # 3. Find employee
         try:
-            employee = User.objects.get(pk=employee_id, role='employee')
+            with sentry_sdk.start_span(
+                op="employee.lookup",
+                name="Lookup Employee"
+            ):
+                employee = User.objects.get(
+                    pk=employee_id,
+                    role='employee'
+                )
+
         except User.DoesNotExist:
-            return Response({'detail': 'Employee not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'detail': 'Employee not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
-        if TeamMember.objects.filter(team=team, employee=employee).exists():
-            return Response({'detail': 'Employee already in this team.'}, status=status.HTTP_400_BAD_REQUEST)
+        # 4. Check whether employee is already in team
+        with sentry_sdk.start_span(
+            op="team.member.check",
+            name="Check Team Membership"
+        ):
+            already_member = TeamMember.objects.filter(
+                team=team,
+                employee=employee
+            ).exists()
 
-        member = TeamMember.objects.create(team=team, employee=employee)
+        if already_member:
+            return Response(
+                {'detail': 'Employee already in this team.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        send_team_assignment_email.delay(team.id, employee.id)
+        # 5. Create team membership
+        with sentry_sdk.start_span(
+            op="team.member.create",
+            name="Create Team Membership"
+        ):
+            member = TeamMember.objects.create(
+                team=team,
+                employee=employee
+            )
 
-        return Response(TeamMemberSerializer(member).data, status=status.HTTP_201_CREATED)
+        # 6. Queue email task
+        with sentry_sdk.start_span(
+            op="celery.enqueue",
+            name="Queue Team Assignment Email"
+        ):
+            send_team_assignment_email.delay(
+                team.id,
+                employee.id
+            )
+
+        # 7. Serialize response
+        with sentry_sdk.start_span(
+            op="response.serialize",
+            name="Serialize Team Member Response"
+        ):
+            response_data = TeamMemberSerializer(member).data
+ # 8. INTENTIONAL SENTRY TEST ERROR
+        #
+        # Only triggers when:
+        # ?sentry_test_error=true
+        #
+        if request.query_params.get("sentry_test_error") == "true":
+            with sentry_sdk.start_span(
+                op="sentry.test_error",
+                name="Intentional Sentry Test Error"
+            ):
+                try:
+                    raise RuntimeError(
+                        "Intentional Sentry test error in TeamAssignView"
+                    )
+                except Exception as exc:
+                    sentry_sdk.capture_exception(exc)
+
+            return Response(
+                {
+                    'detail': 'Intentional Sentry test error triggered.',
+                    'sentry_test': True
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # 9. Normal response
+        return Response(
+            response_data,
+            status=status.HTTP_201_CREATED
+        )
+       
 
     def delete(self, request, pk):
+
+        # 1. Find the team
         try:
-            team = Team.objects.get(pk=pk, manager=request.user)
+            with sentry_sdk.start_span(
+                op="team.lookup",
+                name="Lookup Team"
+            ):
+                team = Team.objects.get(
+                    pk=pk,
+                    manager=request.user
+                )
+
         except Team.DoesNotExist:
-            return Response({'detail': 'Team not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'detail': 'Team not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
+        # 2. Validate employee ID
         emp_id = request.data.get('employee_id')
+
         if not emp_id:
-            return Response({'detail': 'employee_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'detail': 'employee_id is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
+        # 3. Find team member
         try:
-            member = TeamMember.objects.get(team=team, employee_id=emp_id)
-        except TeamMember.DoesNotExist:
-            return Response({'detail': 'Employee not in this team.'}, status=status.HTTP_404_NOT_FOUND)
+            with sentry_sdk.start_span(
+                op="team.member.lookup",
+                name="Lookup Team Membership"
+            ):
+                member = TeamMember.objects.get(
+                    team=team,
+                    employee_id=emp_id
+                )
 
-        member.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        except TeamMember.DoesNotExist:
+            return Response(
+                {'detail': 'Employee not in this team.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 4. Delete team membership
+        with sentry_sdk.start_span(
+            op="team.member.delete",
+            name="Delete Team Membership"
+        ):
+            member.delete()
+
+        return Response(
+            status=status.HTTP_204_NO_CONTENT
+        )
