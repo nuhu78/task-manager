@@ -68,6 +68,7 @@ services:
         "0.0.0.0:8000",
         "--workers",
         "3",
+        "--reload",
         "--access-logfile",
         "-",
         "--error-logfile",
@@ -79,6 +80,7 @@ services:
       - "8000"
 
     volumes:
+      - .:/app
       - static_volume:/app/staticfiles
       - media_volume:/app/media
 
@@ -110,6 +112,9 @@ services:
         "--concurrency=4"
       ]
 
+    volumes:
+      - .:/app
+
     depends_on:
       redis:
         condition: service_healthy
@@ -138,6 +143,9 @@ services:
         "--scheduler",
         "django_celery_beat.schedulers:DatabaseScheduler"
       ]
+
+    volumes:
+      - .:/app
 
     depends_on:
       redis:

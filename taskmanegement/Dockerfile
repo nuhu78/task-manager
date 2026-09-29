@@ -34,12 +34,3 @@ RUN mkdir -p /app/staticfiles /app/media \
 
 # Run as non-root user
 USER django
-
-EXPOSE 8000
-
-CMD ["gunicorn", \
-     "--bind", "0.0.0.0:8000", \
-     "--workers", "3", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-", \
-     "taskmanegement.wsgi:application"]
